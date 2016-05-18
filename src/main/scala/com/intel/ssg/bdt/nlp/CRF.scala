@@ -36,9 +36,10 @@ class CRF private (
     private var regParam: Double,
     private var maxIterations: Int,
     private var tolerance: Double,
-    private var regularization: Regularization) extends Serializable with Logging {
+    private var regularization: Regularization,
+    private var kryo: Boolean) extends Serializable with Logging {
 
-  def this() = this(freq = 1, regParam = 0.5, maxIterations = 1000, tolerance = 1E-3, regularization = L2)
+  def this() = this(freq = 1, regParam = 0.5, maxIterations = 1000, tolerance = 1E-3, regularization = L2, kryo = false)
 
   def setRegParam(regParam: Double) = {
     this.regParam = regParam
@@ -65,6 +66,11 @@ class CRF private (
     this
   }
 
+  def setKryo(kryo: Boolean) = {
+    this.kryo = kryo
+    this
+  }
+
   /**
    * Internal method to train the CRF model
    *
@@ -75,6 +81,9 @@ class CRF private (
   def runCRF(
     template: Array[String],
     trains: RDD[Sequence]): CRFModel = {
+
+    if(kryo) trains.context.getConf.registerKryoClasses(Array(classOf[breeze.linalg.DenseVector[Double]]))
+
     val featureIdx = new FeatureIndex()
     featureIdx.openTemplate(template)
     featureIdx.openTagSetDist(trains)
@@ -85,6 +94,8 @@ class CRF private (
       tagger.read(train, bcFeatureIdxI.value)
       tagger
     })
+
+    featureIdx.nodes ++= Array.fill(featureIdx.tokenNumMax * featureIdx.labels.size)(new Node)
 
     featureIdx.buildDictionaryDist(taggers, bcFeatureIdxI, freq)
 
@@ -123,7 +134,7 @@ class CRF private (
       .setRegParam(regParam)
       .setConvergenceTol(tolerance)
       .setNumIterations(maxIterations)
-      .optimizer(taggers, featureIdx.initAlpha())
+      .optimizer(taggers, featureIdx.initAlpha(), featureIdx.nodes)
 
     featureIdx.saveModel
   }
@@ -149,12 +160,14 @@ object CRF {
       freq: Int,
       maxIteration: Int,
       eta: Double,
-      regularization: Regularization): CRFModel = {
+      regularization: Regularization,
+      kryo: Boolean): CRFModel = {
     new CRF().setRegParam(regParam)
       .setFreq(freq)
       .setMaxIterations(maxIteration)
       .setEta(eta)
       .setRegularization(regularization)
+      .setKryo(kryo)
       .runCRF(templates, train)
   }
 

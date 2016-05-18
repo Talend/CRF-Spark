@@ -30,6 +30,7 @@ private[nlp] class FeatureIndex extends Serializable {
   var maxID = 0
   var alpha :BDV[Double] = _
   var tokensSize = 0
+  var tokenNumMax = 0
   val unigramTempls = new ArrayBuffer[String]()
   val bigramTempls = new ArrayBuffer[String]()
   var labels = new ArrayBuffer[String]()
@@ -37,6 +38,8 @@ private[nlp] class FeatureIndex extends Serializable {
   val kMaxContextSize = 4
   val BOS = Array("_B-1", "_B-2", "_B-3", "_B-4")
   val EOS = Array("_B+1", "_B+2", "_B+3", "_B+4")
+  val nodes  = new ArrayBuffer[Node]()
+
 
   def initAlpha() = {
     alpha = BDV.zeros[Double](maxID)
@@ -215,6 +218,7 @@ private[nlp] class FeatureIndex extends Serializable {
     require(tokensSizeCollect.length == 1,
       "The number of columns should be fixed in each token!")
     tokensSize = tokensSizeCollect.head
+    tokenNumMax = trains.map(_.toArray.length).max()
     labels = features.flatMap(_.labels.distinct).distinct().collect().to[ArrayBuffer]
   }
 

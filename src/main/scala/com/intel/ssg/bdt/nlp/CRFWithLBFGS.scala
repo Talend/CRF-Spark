@@ -18,13 +18,13 @@
 package com.intel.ssg.bdt.nlp
 
 import scala.collection.mutable
-import breeze.optimize.{CachedDiffFunction, DiffFunction, OWLQN => BreezeOWLQN, LBFGS => BreezeLBFGS}
+import scala.collection.mutable.ArrayBuffer
+import breeze.optimize.{CachedDiffFunction, DiffFunction, LBFGS => BreezeLBFGS, OWLQN => BreezeOWLQN}
 import breeze.linalg.{DenseVector => BDV, sum => Bsum}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.Logging
 import org.apache.spark.mllib.optimization._
 import org.apache.spark.mllib.linalg.{Vector => SparkVector}
-
 
 class CRFWithLBFGS(private var gradient: CRFGradient, private var updater: Updater)
   extends LBFGS(gradient: Gradient, updater: Updater) {
@@ -61,7 +61,7 @@ class CRFWithLBFGS(private var gradient: CRFGradient, private var updater: Updat
     this
   }
 
-  def optimizer(data: RDD[Tagger], initialWeights: BDV[Double]): BDV[Double] = {
+  def optimizer(data: RDD[Tagger], initialWeights: BDV[Double], nodes: ArrayBuffer[Node]): BDV[Double] = {
     CRFWithLBFGS.runLBFGS(data,
       gradient,
       updater,
@@ -69,7 +69,8 @@ class CRFWithLBFGS(private var gradient: CRFGradient, private var updater: Updat
       convergenceTol,
       maxNumIterations,
       regParam,
-      initialWeights)
+      initialWeights,
+      nodes)
   }
 }
 
@@ -82,9 +83,10 @@ object CRFWithLBFGS extends Logging {
       convergenceTol: Double,
       maxNumIterations: Int,
       regParam: Double,
-      initialWeights: BDV[Double]): BDV[Double] = {
+      initialWeights: BDV[Double],
+      nodes: ArrayBuffer[Node]): BDV[Double] = {
 
-    val costFun = new CostFun(data, gradient, updater, regParam)
+    val costFun = new CostFun(data, gradient, updater, regParam, nodes)
 
     var lbfgs: BreezeLBFGS[BDV[Double]] = null
 
@@ -119,12 +121,12 @@ class CRFGradient extends Gradient {
     throw new Exception("The original compute() method is not supported")
   }
 
-  def computeCRF(sentences: Iterator[Tagger], weights: BDV[Double]): (BDV[Double], Double) = {
+  def computeCRF(sentences: Iterator[Tagger], weights: BDV[Double], nodesX: ArrayBuffer[Node]): (BDV[Double], Double) = {
 
     val expected = BDV.zeros[Double](weights.length)
     var obj: Double = 0.0
     while (sentences.hasNext)
-      obj += sentences.next().gradient(expected, weights)
+      obj += sentences.next().gradient(expected, weights, nodesX)
 
     (expected, obj)
   }
@@ -166,15 +168,21 @@ private class CostFun(
     taggers: RDD[Tagger],
     gradient: CRFGradient,
     updater: Updater,
-    regParam: Double) extends DiffFunction[BDV[Double]] with Serializable {
+    regParam: Double,
+    nodes: ArrayBuffer[Node]) extends DiffFunction[BDV[Double]] with Serializable {
 
   override def calculate(weigths: BDV[Double]): (Double, BDV[Double]) = {
 
     val bcWeights = taggers.context.broadcast(weigths)
-    lazy val treeDepth = math.ceil(math.log(taggers.partitions.length) / (math.log(2) * 2)).toInt
+    val bcNodes = taggers.context.broadcast(nodes)
+    lazy val treeDepth: Int = {
+      var depth = math.ceil(math.log(taggers.partitions.length) / (math.log(2) * 2)).toInt
+      if(depth < 2) depth = 2
+      depth
+    }
 
     val (expected, obj) = taggers.mapPartitions(sentences =>
-      Iterator(gradient.computeCRF(sentences, bcWeights.value))
+      Iterator(gradient.computeCRF(sentences, bcWeights.value, bcNodes.value))
     ).treeReduce((p1, p2) => (p1, p2) match {
       case ((expected1, obj1), (expected2, obj2)) =>
         (expected1 + expected2, obj1 + obj2)

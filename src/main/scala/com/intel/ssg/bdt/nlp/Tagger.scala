@@ -19,8 +19,8 @@ package com.intel.ssg.bdt.nlp
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-
 import breeze.linalg.{DenseVector => BDV, Vector => BV}
+import org.apache.spark.broadcast.Broadcast
 
 private[nlp] trait Mode
 
@@ -39,7 +39,8 @@ private[nlp] class Tagger (
   var obj = 0.0
   var costFactor = 1.0
   val x = new ArrayBuffer[Array[String]]()
-  val nodes  = new ArrayBuffer[Node]()
+//  val nodes  = new ArrayBuffer[Node]()
+  var nodes = new ArrayBuffer[Node]()
   val answer = new ArrayBuffer[Int]()
   val result = new ArrayBuffer[Int]()
   val featureCache = new ArrayBuffer[Int]()
@@ -63,12 +64,12 @@ private[nlp] class Tagger (
     this
   }
 
-  def read(lines: Sequence, feature_idx: FeatureIndex): Unit = {
+  def read(lines: Sequence, featureIdx: FeatureIndex): Unit = {
     lines.toArray.foreach{ t =>
       mode match {
       case LearnMode =>
-        for (y <- feature_idx.labels if y.equals(t.label))
-          answer.append(feature_idx.labels.indexOf(y))
+        for (y <- featureIdx.labels if y.equals(t.label))
+          answer.append(featureIdx.labels.indexOf(y))
         x.append(t.tags)
       case TestMode =>
         x.append(t.tags)
@@ -84,7 +85,7 @@ private[nlp] class Tagger (
    */
   def rebuildFeatures(): Unit = {
 
-    nodes ++= Array.fill(x.length * ySize)(new Node)
+    if(mode == TestMode) nodes ++= Array.fill(x.length * ySize)(new Node)
     nodes.zipWithIndex.foreach{ case(n, index) =>
       n.x = index / ySize
       n.y = index - n.x * ySize
@@ -146,8 +147,9 @@ private[nlp] class Tagger (
     cost = - nodes((x.length - 1)*ySize + result.last).bestCost
   }
 
-  def gradient(expected: BV[Double], alpha: BDV[Double]): Double = {
+  def gradient(expected: BV[Double], alpha: BDV[Double], nodesX: ArrayBuffer[Node]): Double = {
 
+    nodes = nodesX.take(x.length * ySize)
     buildLattice(alpha)
     forwardBackward()
 
@@ -196,10 +198,18 @@ private[nlp] class Tagger (
 
   def clear(): Unit = {
     nodes foreach{ n =>
+      n.x = 0
+      n.y = 0
+      n.alpha = 0.0
+      n.beta = 0.0
+      n.cost = 0.0
+      n.bestCost = 0.0
+      n.prev = None
+      n.fVector = 0
       n.lPath.clear()
       n.rPath.clear()
     }
-    nodes.clear()
+    if(mode == TestMode) nodes.clear()
   }
 
   def parse(alpha: BDV[Double], mode: Option[VerboseMode]): Unit = {

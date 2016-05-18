@@ -121,12 +121,15 @@ class CRFGradient extends Gradient {
     throw new Exception("The original compute() method is not supported")
   }
 
-  def computeCRF(sentences: Iterator[Tagger], weights: BDV[Double], nodesX: ArrayBuffer[Node]): (BDV[Double], Double) = {
+  def computeCRF(sentences: Iterator[Tagger], weights: BDV[Double], nodesLength: Int): (BDV[Double], Double) = {
+
+    val nodes = new ArrayBuffer[Node]()
+    nodes ++= Array.fill(nodesLength)(new Node)
 
     val expected = BDV.zeros[Double](weights.length)
     var obj: Double = 0.0
     while (sentences.hasNext)
-      obj += sentences.next().gradient(expected, weights, nodesX)
+      obj += sentences.next().gradient(expected, weights, nodes)
 
     (expected, obj)
   }
@@ -174,7 +177,7 @@ private class CostFun(
   override def calculate(weigths: BDV[Double]): (Double, BDV[Double]) = {
 
     val bcWeights = taggers.context.broadcast(weigths)
-    val bcNodes = taggers.context.broadcast(nodes)
+    val bcNodes = taggers.context.broadcast(nodes.length)
     lazy val treeDepth: Int = {
       var depth = math.ceil(math.log(taggers.partitions.length) / (math.log(2) * 2)).toInt
       if(depth < 2) depth = 2

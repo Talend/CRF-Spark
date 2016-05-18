@@ -198,14 +198,14 @@ private[nlp] class Tagger (
 
   def clear(): Unit = {
     nodes foreach{ n =>
-      n.x = 0
-      n.y = 0
-      n.alpha = 0.0
-      n.beta = 0.0
-      n.cost = 0.0
-      n.bestCost = 0.0
-      n.prev = None
-      n.fVector = 0
+//      n.x = 0
+//      n.y = 0
+//      n.alpha = 0.0
+//      n.beta = 0.0
+//      n.cost = 0.0
+//      n.bestCost = 0.0
+//      n.prev = None
+//      n.fVector = 0
       n.lPath.clear()
       n.rPath.clear()
     }

@@ -177,7 +177,7 @@ private class CostFun(
       Iterator(gradient.computeCRF(sentences, bcWeights.value))
     )
 
-    val y = x.flatMap(_._1).map(_.swap).reduceByKey(_ + _).sortBy(_._1).map(_._2).collect()
+    val y = x.flatMap(_._1).map(_.swap).reduceByKey(_ + _).collect().sortBy(_._1).map(_._2)
     val expected = new BDV[Double](y)
 
     val obj = x.map(_._2).reduce(_ + _)

@@ -176,11 +176,14 @@ private class CostFun(
     val x: RDD[(Array[(Double, Int)], Double)] = taggers.mapPartitions(sentences =>
       Iterator(gradient.computeCRF(sentences, bcWeights.value))
     )
+    val y: Array[(Array[(Double, Int)], Double)] = x.collect()
 
-    val y = x.flatMap(_._1).map(_.swap).reduceByKey(_ + _).collect().sortBy(_._1).map(_._2)
-    val expected = new BDV[Double](y)
+    val obj = y.map(_._2).sum
+    val expected = BDV.zeros[Double](weigths.length)
 
-    val obj = x.map(_._2).reduce(_ + _)
+    for(i <- y.indices)
+      for(j <- y(i)._1.indices)
+        expected(y(i)._1(j)._2) += y(i)._1(j)._1
 
     val (grad, loss) = updater.asInstanceOf[UpdaterCRF].computeCRF(weigths, expected, regParam)
     (obj + loss, grad)

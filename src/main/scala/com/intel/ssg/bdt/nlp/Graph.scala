@@ -17,6 +17,7 @@
 
 package com.intel.ssg.bdt.nlp
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 import breeze.linalg.{Vector => BV}
@@ -29,10 +30,14 @@ private[nlp] class Node extends Serializable {
   var cost = 0.0
   var bestCost = 0.0
   var prev: Option[Node] = None
-  var fVector = 0
+  var fVector: ArrayBuffer[Int] = _
   val lPath = new ArrayBuffer[Path]()
   val rPath = new ArrayBuffer[Path]()
 
+  def clearAll() = {
+    this.lPath.foreach(_.clearAll())
+    this.rPath.foreach(_.clearAll())
+  }
 
   /**
     * simplify the log likelihood.
@@ -62,21 +67,18 @@ private[nlp] class Node extends Serializable {
   }
 
   def calExpectation(
-      expected: BV[Double],
       Z: Double,
       size: Int,
-      featureCache: ArrayBuffer[Int],
+      featureCache: mutable.HashMap[Int, Double],
       nodes: ArrayBuffer[Node]): Unit = {
     val c: Double = math.exp(alpha + beta -cost - Z)
 
-    var idx: Int = fVector
-    while (featureCache(idx) != -1) {
-      expected(featureCache(idx) + y) += c
-      idx += 1
-    }
+    fVector.foreach(x => {
+      featureCache.update(x + y, featureCache.getOrElse(x + y, 0.0) + c)
+    })
 
     for(i <- lPath.indices)
-      lPath(i).calExpectation(expected, Z, size, featureCache, nodes)
+      lPath(i).calExpectation(Z, size, featureCache, nodes)
 
   }
 }
@@ -85,21 +87,23 @@ private[nlp] class Path extends Serializable {
   var rNode = 0
   var lNode = 0
   var cost = 0.0
-  var fVector = 0
+  var fVector: ArrayBuffer[Int] = _
+
+  def clearAll() = {
+    this.fVector.clear()
+  }
 
   def calExpectation(
-      expected: BV[Double],
       Z: Double,
       size: Int,
-      featureCache: ArrayBuffer[Int],
+      featureCache: mutable.HashMap[Int, Double],
       nodes: ArrayBuffer[Node]): Unit = {
     val c: Double = math.exp(nodes(lNode).alpha + cost + nodes(rNode).beta - Z)
-    var idx: Int = fVector
 
-    while (featureCache(idx) != -1) {
-      expected(featureCache(idx) + nodes(lNode).y * size + nodes(rNode).y) += c
-      idx += 1
-    }
+    val addition = nodes(lNode).y * size + nodes(rNode).y
+    fVector.foreach(x => {
+      featureCache.update(x + addition, featureCache.getOrElse(x + addition, 0.0) + c)
+    })
   }
 
   def add(lnd: Int, rnd: Int, nodes: ArrayBuffer[Node]): Unit = {

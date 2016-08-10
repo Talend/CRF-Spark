@@ -118,14 +118,8 @@ class CRFGradient extends Gradient {
     throw new Exception("The original compute() method is not supported")
   }
 
-  def computeCRF(sentences: Iterator[Tagger], weights: BDV[Double]): (BDV[Double], Double) = {
-
-    val expected = BDV.zeros[Double](weights.length)
-    var obj: Double = 0.0
-    while (sentences.hasNext)
-      obj += sentences.next().gradient(expected, weights)
-
-    (expected, obj)
+  def computeCRF(sentences: Tagger, weights: BDV[Double]) = {
+    sentences.gradient(weights)
   }
 }
 
@@ -170,14 +164,23 @@ private class CostFun(
   override def calculate(weigths: BDV[Double]): (Double, BDV[Double]) = {
 
     val bcWeights = taggers.context.broadcast(weigths)
-    lazy val treeDepth = math.ceil(math.log(taggers.partitions.length) / (math.log(2) * 2)).toInt
+    val expected = BDV.zeros[Double](weigths.length)
+    var obj = 0.0
 
-    val (expected, obj) = taggers.mapPartitions(sentences =>
-      Iterator(gradient.computeCRF(sentences, bcWeights.value))
-    ).treeReduce((p1, p2) => (p1, p2) match {
-      case ((expected1, obj1), (expected2, obj2)) =>
-        (expected1 + expected2, obj1 + obj2)
-    }, treeDepth)
+    val expectedPartitions: Array[(Array[(Int, Double)], Double)] = taggers.map(sentences =>
+      gradient.computeCRF(sentences, bcWeights.value)
+    ).collect()
+
+    var i = 0
+    while(i < expectedPartitions.length){
+      var j = 0
+      while(j < expectedPartitions(i)._1.length){
+        expected(expectedPartitions(i)._1(j)._1) += expectedPartitions(i)._1(j)._2
+        j += 1
+      }
+      obj += expectedPartitions(i)._2
+      i += 1
+    }
 
     val (grad, loss) = updater.asInstanceOf[UpdaterCRF].computeCRF(weigths, expected, regParam)
     (obj + loss, grad)

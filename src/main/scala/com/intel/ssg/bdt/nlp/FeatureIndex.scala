@@ -60,13 +60,16 @@ private[nlp] class FeatureIndex extends Serializable {
     List(unigramTempls, bigramTempls).foreach{ templs =>
       tagger.x.foreach { token =>
         if (tagger.x.head != token || templs.head.head.equals('U')) {
-          tagger.featureCacheIndex.append(tagger.featureCache.length)
+          val tempIndex = new ArrayBuffer[Int]()
           templs.foreach { templ =>
             val os = applyRule(templ, tagger.x.indexOf(token), tagger)
             val id = dic.getOrElse(os, (-1, 0))._1
-            if (id != -1) tagger.featureCache.append(id)
+            if (id != -1) {
+              tagger.featureCache.put(id, 0.0)
+              tempIndex += id
+            }
           }
-          tagger.featureCache.append(-1)
+          tagger.featureCacheIndex += tempIndex
         }
       }
     }

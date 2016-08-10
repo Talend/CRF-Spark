@@ -42,8 +42,8 @@ private[nlp] class Tagger (
   val nodes  = new ArrayBuffer[Node]()
   val answer = new ArrayBuffer[Int]()
   val result = new ArrayBuffer[Int]()
-  val featureCache = new ArrayBuffer[Int]()
-  val featureCacheIndex = new ArrayBuffer[Int]()
+  val featureCache = mutable.HashMap[Int, Double]()
+  val featureCacheIndex = new ArrayBuffer[ArrayBuffer[Int]]()
   val probMatrix = new ArrayBuffer[Double]()
   var seqProb = 0.0
   lazy val topN = ArrayBuffer.empty[Array[Int]]
@@ -147,20 +147,22 @@ private[nlp] class Tagger (
     cost = - nodes((x.length - 1)*ySize + result.last).bestCost
   }
 
-  def gradient(expected: BV[Double], alpha: BDV[Double]): Double = {
+  def gradient(alpha: BDV[Double]): (Array[(Int, Double)], Double) = {
+
+    featureCache.foreach(x => {
+      featureCache.update(x._1, 0.0)
+    })
 
     buildLattice(alpha)
     forwardBackward()
 
-    nodes.foreach(_.calExpectation(expected, Z, ySize, featureCache, nodes))
+    nodes.foreach(_.calExpectation(Z, ySize, featureCache, nodes))
 
     var s: Double = 0.0
     for (i <- x.indices) {
-      var rIdx = nodes(i * ySize + answer(i)).fVector
-      while (featureCache(rIdx) != -1) {
-        expected(featureCache(rIdx) + answer(i)) -= 1.0
-        rIdx += 1
-      }
+      nodes(i * ySize + answer(i)).fVector.foreach(x => {
+        featureCache.update(x + answer(i), featureCache.getOrElse(x + answer(i), 0.0) - 1.0)
+      })
       s += nodes(i * ySize + answer(i)).cost
       var j = 0
       while (j < nodes(i * ySize + answer(i)).lPath.length) {
@@ -168,11 +170,10 @@ private[nlp] class Tagger (
         val rNode = nodes(nodes(i * ySize + answer(i)).lPath(j).rNode)
         val lPath = nodes(i * ySize + answer(i)).lPath(j)
         if (lNode.y == answer(lNode.x)) {
-          rIdx = lPath.fVector
-          while (featureCache(rIdx) != -1) {
-            expected(featureCache(rIdx) + lNode.y * ySize + rNode.y) -= 1.0
-            rIdx += 1
-          }
+          val addition = lNode.y * ySize + rNode.y
+          lPath.fVector.foreach(x => {
+            featureCache.update(x + addition, featureCache.getOrElse(x + addition, 0.0) - 1.0)
+          })
           s += lPath.cost
         }
         j += 1
@@ -181,7 +182,7 @@ private[nlp] class Tagger (
 
     viterbi()
     clear()
-    Z - s
+    (featureCache.toArray, Z - s)
   }
 
   def probCalculate(): Unit ={
@@ -196,10 +197,7 @@ private[nlp] class Tagger (
   }
 
   def clear(): Unit = {
-    nodes foreach{ n =>
-      n.lPath.clear()
-      n.rPath.clear()
-    }
+    nodes.foreach(_.clearAll())
     nodes.clear()
   }
 
@@ -240,30 +238,16 @@ private[nlp] class Tagger (
 
   def calcCost(n: Node, alpha: BDV[Double]): Node = {
     var cd: Double = 0.0
-    var idx: Int = n.fVector
-    n.cost = 0.0
-
-    while (featureCache(idx) != -1) {
-      cd += alpha(featureCache(idx) + n.y)
-      n.cost = cd * costFactor
-      idx += 1
-    }
-
+    n.fVector.foreach(x => cd += alpha(x + n.y))
+    n.cost = cd * costFactor
     n
   }
 
   def calcCost(p: Path, alpha: BDV[Double]): Path = {
     var cd: Double = 0.0
-    var idx: Int = p.fVector
-    p.cost = 0.0
-
-    while (featureCache(idx) != -1) {
-      cd += alpha(featureCache(idx) +
-        nodes(p.lNode).y * ySize + nodes(p.rNode).y)
-      p.cost = cd * costFactor
-      idx += 1
-    }
-
+    val addition = nodes(p.lNode).y * ySize + nodes(p.rNode).y
+    p.fVector.foreach(x => cd += alpha(x + addition))
+    p.cost = cd * costFactor
     p
   }
 

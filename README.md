@@ -74,5 +74,6 @@ or you can set the maxIterations what you need simply.
 
  If you encounter bugs, feel free to submit an issue or pull request.
  Also you can mail to:
- * [hqzizania](https://github.com/hqzizania)
- * [chenghao-intel](https://github.com/chenghao-intel)
+ * [Peng, Meng](peng.meng@intel.com)
+ * [Hao, Cheng](hao.cheng@intel.com)
+ * Qian, Huang (Intel)

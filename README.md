@@ -1,5 +1,5 @@
 # CRF-Spark
-A Spark-based implementation of Conditional Random Fields (CRFs) for segmenting/labeling sequential data.
+A Spark-based implementation of Conditional Random Fields (CRFs) for segmenting/labeling sequential data. Basically this project is deprecated, and we will not maintain it any more, please check the new project at https://github.com/Intel-bigdata/imllib-spark.
 
 ## Requirements
 This documentation is for Spark 1.4+. Other version will probably work yet not tested.

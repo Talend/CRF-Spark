@@ -2,15 +2,15 @@ name := "crf-spark"
 
 version := "0.2.0"
 
-scalaVersion := "2.10.4"
+scalaVersion := "2.11.12"
 
 spName := "hqzizania/crf-spark"
 
-sparkVersion := "2.0.0"
+sparkVersion := "2.2.2"
 
 sparkComponents += "mllib"
 
-libraryDependencies += "org.scalanlp" %% "breeze" % "0.11.2"
+libraryDependencies += "org.scalanlp" %% "breeze" % "0.13.2"
 
 resolvers += Resolver.sonatypeRepo("public")
 

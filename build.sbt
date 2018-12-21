@@ -6,7 +6,7 @@ scalaVersion := "2.10.4"
 
 spName := "hqzizania/crf-spark"
 
-sparkVersion := "2.0.0"
+sparkVersion := "1.6.3"
 
 sparkComponents += "mllib"
 

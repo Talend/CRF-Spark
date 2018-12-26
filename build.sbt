@@ -1,4 +1,4 @@
-name := "crf-spark"
+name := "crf-spark_2.2"
 
 version := "0.2.0"
 

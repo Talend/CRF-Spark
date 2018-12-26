@@ -1,5 +1,7 @@
 name := "crf-spark_2.2"
 
+moduleName := name.value
+
 version := "0.2.0"
 
 scalaVersion := "2.11.12"
